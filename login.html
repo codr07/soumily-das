@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - OCBMS</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">OCBMS</a>
+        </div>
+    </nav>
+
+    <!-- Login Form -->
+    <div class="container auth-wrapper">
+        <div class="auth-form shadow">
+            <h3 class="text-center mb-4 border-bottom pb-2">Welcome Back</h3>
+            <div id="loginAlert" class="alert alert-danger d-none"></div>
+            <form id="loginForm">
+                <div class="mb-3">
+                    <label class="form-label">Email address</label>
+                    <input type="email" class="form-control" id="email" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-bold">Login</button>
+            </form>
+            <div class="text-center mt-3">
+                <p class="mb-0">Don't have an account? <a href="register.html">Register</a></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery and Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="api.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#loginForm').on('submit', function(e) {
+                e.preventDefault();
+                $('#loginAlert').addClass('d-none');
+                
+                const data = {
+                    email: $('#email').val(),
+                    password: $('#password').val()
+                };
+
+                // Use the API wrapper
+                new Promise((resolve, reject) => {
+                    $.ajax({
+                        url: '/api/auth/login',
+                        type: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(data),
+                        xhrFields: { withCredentials: true },
+                        success: resolve,
+                        error: (xhr) => reject(xhr.responseJSON?.error || 'Login failed')
+                    });
+                }).then(res => {
+                    // Save info to localStorage
+                    localStorage.setItem('userRole', res.role);
+                    localStorage.setItem('username', res.username);
+                    localStorage.setItem('userId', res.userId);
+                    window.location.href = 'dashboard.html';
+                }).catch(err => {
+                    $('#loginAlert').text(err).removeClass('d-none');
+                });
+            });
+        });
+    </script>
+</body>
+</html>

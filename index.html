@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Craft Business Management System</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">OCBMS</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarsExample">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarsExample">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item"><a class="nav-link active" href="index.html">Home</a></li>
+                    <li class="nav-item d-flex align-items-center ms-3 me-3">
+                        <a class="btn btn-warning btn-sm fw-bold shadow-sm" href="checkout.html" id="cartLink">
+                            🛒 Checkout (<span id="cartCount">0</span>)
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex" id="authSection">
+                    <a href="login.html" class="btn btn-outline-light me-2">Login</a>
+                    <a href="register.html" class="btn btn-light">Register</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Header -->
+    <header class="py-5 bg-light border-bottom mb-4">
+        <div class="container text-center">
+            <h1 class="fw-bolder">Welcome to the Online Craft Store!</h1>
+            <p class="lead mb-0">Discover unique, handcrafted items directly from artisans.</p>
+        </div>
+    </header>
+
+    <!-- Page Content -->
+    <div class="container">
+        <div class="row" id="productContainer">
+            <!-- Products will be dynamically loaded here by jQuery -->
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="py-5 bg-dark mt-5">
+        <div class="container"><p class="m-0 text-center text-white">Copyright &copy; OCBMS 2026. Designed for BCA Project.</p></div>
+    </footer>
+
+    <!-- jQuery and Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+    <script>
+        $(document).ready(function() {
+            API.getProducts().then(products => {
+                let html = '';
+                if(products.length === 0) {
+                    html = '<div class="col-12 text-center"><p>No products available at the moment.</p></div>';
+                } else {
+                    products.forEach(p => {
+                        const img = p.image_url ? p.image_url : 'https://dummyimage.com/450x300/dee2e6/6c757d.jpg';
+                        html += `
+                        <div class="col-lg-4 col-md-6 mb-4">
+                            <div class="card h-100 shadow-sm product-card">
+                                <img class="card-img-top" src="${img}" alt="${p.name}">
+                                <div class="card-body">
+                                    <h5 class="card-title fw-bold">${p.name}</h5>
+                                    <p class="card-text">${p.description || 'A beautiful handcrafted item.'}</p>
+                                    <h6 class="text-primary fw-bold">$${p.price}</h6>
+                                    <p class="text-muted small">Stock: ${p.stock_quantity}</p>
+                                </div>
+                                <div class="card-footer bg-transparent border-top-0 d-flex gap-2">
+                                    <button class="btn btn-outline-success w-50 addToCartBtn" data-id="${p.product_id}" data-name="${p.name}" data-price="${p.price}" ${p.stock_quantity === 0 ? 'disabled' : ''}>
+                                        <small>${p.stock_quantity === 0 ? 'Out of Stock' : '+ Cart'}</small>
+                                    </button>
+                                    <button class="btn btn-primary w-50 buyNowBtn" data-id="${p.product_id}" data-name="${p.name}" data-price="${p.price}" ${p.stock_quantity === 0 ? 'disabled' : ''}>
+                                        <small>Buy Now</small>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>`;
+                    });
+                }
+                $('#productContainer').html(html);
+            }).catch(err => {
+                $('#productContainer').html('<div class="col-12 text-center text-danger"><p>Failed to load products.</p></div>');
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - OCBMS</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
+        <a class="navbar-brand col-sm-3 col-md-2 mr-0 px-3 fw-bold" href="index.html">OCBMS Panel</a>
+        <ul class="navbar-nav px-3">
+            <li class="nav-item text-nowrap">
+                <button class="btn btn-outline-danger" id="logoutBtn">Sign out</button>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-2 d-none d-md-block bg-light sidebar">
+                <div class="sidebar-sticky p-3">
+                    <ul class="nav flex-column mb-3">
+                        <li class="nav-item">
+                            <span class="nav-link fw-bold text-primary">Welcome, <span id="dashUser"></span></span>
+                        </li>
+                    </ul>
+                    <ul class="nav flex-column" id="navMenu">
+                        <!-- Loaded dynamically based on role -->
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content Area -->
+            <main role="main" class="col-md-9 ms-sm-auto col-lg-10 px-4 pt-4 mt-3">
+                <div id="contentArea">Loading dashboard...</div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="api.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            const role = localStorage.getItem('userRole');
+            const username = localStorage.getItem('username');
+            
+            if (!role) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            $('#dashUser').text(username);
+
+            // Handle Logout
+            $('#logoutBtn').click(function() {
+                $.ajax({
+                    url: '/api/auth/logout',
+                    type: 'POST',
+                    xhrFields: { withCredentials: true },
+                    success: function() {
+                        localStorage.clear();
+                        window.location.href = 'index.html';
+                    }
+                });
+            });
+
+            // Role Based Content
+            if (role === 'Admin') renderAdmin();
+            else if (role === 'Artisan') renderArtisan();
+            else renderCustomer();
+
+            function renderCustomer() {
+                $('#navMenu').html(`
+                    <li class="nav-item"><a class="nav-link active" href="#" onclick="location.reload()">My Orders</a></li>
+                    <li class="nav-item mt-3"><a class="btn btn-sm btn-outline-primary ms-3" href="index.html">🛍️ Back to Shop</a></li>
+                `);
+                
+                $.ajax({
+                    url: '/api/orders',
+                    type: 'GET',
+                    xhrFields: { withCredentials: true },
+                    success: function(orders) {
+                        let html = `
+                            <h2>My Previous Orders</h2>
+                            <div id="orderDetails" class="mb-4"></div>
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover table-sm align-middle">
+                                    <thead class="table-dark"><tr><th>Order ID</th><th>Date</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+                                    <tbody>
+                        `;
+                        if(orders.length === 0) html += '<tr><td colspan="5" class="text-center">You have no orders placed yet.</td></tr>';
+                        orders.forEach(o => {
+                            html += `<tr>
+                                <td>#${o.order_id}</td>
+                                <td>${new Date(o.created_at).toLocaleDateString()}</td>
+                                <td>$${o.total_amount}</td>
+                                <td><span class="badge ${o.status === 'Cancelled' ? 'bg-danger' : 'bg-success'}">${o.status}</span></td>
+                                <td><button class="btn btn-sm btn-info viewOrderBtn fw-bold" data-id="${o.order_id}">View Items</button></td>
+                            </tr>`;
+                        });
+                        html += '</tbody></table></div>';
+                        $('#contentArea').html(html);
+
+                        // Attach event listeners for Order Detailed View
+                        $('.viewOrderBtn').click(function() {
+                            const oid = $(this).data('id');
+                            $.ajax({
+                                url: '/api/orders/' + oid,
+                                type: 'GET',
+                                xhrFields: { withCredentials: true },
+                                success: function(res) {
+                                    let dt = `<div class="card shadow-sm border-info"><div class="card-body">`;
+                                    dt += `<h5 class="card-title text-info">Order #${oid} Details:</h5><ul class="list-group list-group-flush mb-0">`;
+                                    res.items.forEach(i => {
+                                        dt += `<li class="list-group-item d-flex justify-content-between px-0">
+                                            <span>🏷️ ${i.product_name} <span class="badge bg-secondary rounded-pill">x${i.quantity}</span></span>
+                                            <span class="fw-bold">$${(i.quantity * i.price_at_purchase).toFixed(2)}</span>
+                                        </li>`;
+                                    });
+                                    dt += `</ul></div></div>`;
+                                    $('#orderDetails').html(dt);
+                                }
+                            });
+                        });
+                    }
+                });
+            }
+
+            function renderAdmin() {
+                $('#navMenu').html(`
+                    <li class="nav-item"><a class="nav-link nav-view" data-view="sales" href="#">Sales Summary</a></li>
+                    <li class="nav-item"><a class="nav-link nav-view" data-view="orders" href="#">All Orders</a></li>
+                `);
+                loadSalesSummary();
+
+                $('.nav-view').click(function(e) {
+                    e.preventDefault();
+                    const view = $(this).data('view');
+                    if (view === 'sales') loadSalesSummary();
+                    if (view === 'orders') loadAllOrders();
+                });
+            }
+
+            function loadSalesSummary() {
+                $.ajax({
+                    url: '/api/reports/sales/summary',
+                    type: 'GET',
+                    xhrFields: { withCredentials: true },
+                    success: function(summary) {
+                        $('#contentArea').html(`
+                            <h2>Overview</h2>
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="card text-white bg-primary mb-3">
+                                        <div class="card-header">Total Revenue</div>
+                                        <div class="card-body"><h5 class="card-title display-4">$${summary.total_revenue || 0}</h5></div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card text-white bg-success mb-3">
+                                        <div class="card-header">Total Orders</div>
+                                        <div class="card-body"><h5 class="card-title display-4">${summary.total_orders || 0}</h5></div>
+                                    </div>
+                                </div>
+                            </div>
+                        `);
+                    }
+                });
+            }
+
+            function loadAllOrders() {
+                 $.ajax({
+                    url: '/api/orders',
+                    type: 'GET',
+                    xhrFields: { withCredentials: true },
+                    success: function(orders) {
+                        let html = '<h2>System Orders</h2><div class="table-responsive"><table class="table table-hover table-sm"><thead><tr><th>ID</th><th>User ID</th><th>Date</th><th>Total</th><th>Status</th></tr></thead><tbody>';
+                        orders.forEach(o => {
+                            html += `<tr><td>#${o.order_id}</td><td>${o.user_id}</td><td>${new Date(o.created_at).toLocaleDateString()}</td><td>$${o.total_amount}</td><td>${o.status}</td></tr>`;
+                        });
+                        html += '</tbody></table></div>';
+                        $('#contentArea').html(html);
+                    }
+                });
+            }
+
+            function renderArtisan() {
+                $('#navMenu').html('<li class="nav-item"><a class="nav-link active" href="#" onclick="location.reload()">My Portfolio</a></li>');
+                
+                const currentUserId = parseInt(localStorage.getItem('userId'));
+
+                $.ajax({
+                    url: '/api/inventory/products',
+                    type: 'GET',
+                    success: function(products) {
+                        // Filter for only logged in artisan
+                        const myProducts = products.filter(p => p.artisan_id === currentUserId);
+
+                        let html = `
+                            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center mb-3 border-bottom pb-2">
+                                <h2>Seller Portfolio</h2>
+                                <button class="btn btn-primary" id="showAddFormBtn">+ List New Craft</button>
+                            </div>
+                            
+                            <!-- Add Product Inline Form -->
+                            <div class="card shadow-sm mb-4 d-none border-primary" id="addProductFormContainer">
+                                <div class="card-body">
+                                    <h5 class="card-title text-primary">List New Item</h5>
+                                    <form id="addProductForm">
+                                        <div class="row">
+                                            <div class="col-md-6 mb-2"><input type="text" class="form-control" id="pName" placeholder="Product Title" required></div>
+                                            <div class="col-md-6 mb-2"><input type="text" class="form-control" id="pSku" placeholder="Unique SKU" required></div>
+                                            <div class="col-md-4 mb-2"><input type="number" step="0.01" class="form-control" id="pPrice" placeholder="Price ($)" required></div>
+                                            <div class="col-md-4 mb-2"><input type="number" class="form-control" id="pStock" placeholder="Inventory Count" required></div>
+                                            <div class="col-md-4 mb-2">
+                                                <select class="form-control" id="pCategory">
+                                                    <option value="1">Pottery</option><option value="2">Woodwork</option>
+                                                    <option value="3">Jewelry</option><option value="4">Textiles</option><option value="5">Glass Art</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-12 mb-3"><textarea class="form-control" id="pDesc" placeholder="Item Description" required></textarea></div>
+                                            <div class="col-md-12">
+                                                <button type="submit" class="btn btn-success fw-bold">Publish Item</button> 
+                                                <button type="button" class="btn btn-outline-secondary ms-2" id="hideAddFormBtn">Cancel</button>
+                                            </div>
+                                        </div>
+                                    </form>
+                                    <div id="addProductAlert" class="alert alert-danger d-none mt-2"></div>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-striped table-hover align-middle">
+                                    <thead class="table-dark"><tr><th>SKU</th><th>Image</th><th>Name</th><th>Price</th><th>Stock</th><th>Category</th></tr></thead>
+                                    <tbody>
+                        `;
+
+                        if(myProducts.length === 0) {
+                            html += '<tr><td colspan="6" class="text-center py-4 text-muted">You have absolutely no products listed currently. Start selling!</td></tr>';
+                        } else {
+                            myProducts.forEach(p => {
+                                const img = p.image_url ? p.image_url : 'https://dummyimage.com/150x100/ccc/fff';
+                                html += `<tr>
+                                    <td><span class="text-muted">${p.sku}</span></td>
+                                    <td><img src="${img}" width="50" height="50" class="rounded object-fit-cover shadow-sm"></td>
+                                    <td class="fw-bold">${p.name}</td>
+                                    <td>$${p.price}</td>
+                                    <td>
+                                        <span class="badge ${p.stock_quantity > 0 ? 'bg-success' : 'bg-danger'} p-2">${p.stock_quantity > 0 ? p.stock_quantity + ' in stock' : 'Out of Stock'}</span>
+                                    </td>
+                                    <td>${p.category_name || 'Generic'}</td>
+                                </tr>`;
+                            });
+                        }
+                        
+                        html += '</tbody></table></div>';
+                        $('#contentArea').html(html);
+
+                        // Attach event listeners for Add Form interactions
+                        $('#showAddFormBtn').click(() => $('#addProductFormContainer').removeClass('d-none'));
+                        $('#hideAddFormBtn').click(() => $('#addProductFormContainer').addClass('d-none'));
+                        
+                        $('#addProductForm').submit(function(e) {
+                            e.preventDefault();
+                            $('#addProductAlert').addClass('d-none');
+                            
+                            const catId = parseInt($('#pCategory').val());
+                            // Automatically assign correct AI image path based on category selection!
+                            let pImgUrl = '';
+                            if (catId === 1) pImgUrl = 'images/pottery.png';
+                            else if (catId === 2) pImgUrl = 'images/woodwork.png';
+                            else if (catId === 3) pImgUrl = 'images/jewelry.png';
+                            else if (catId === 4) pImgUrl = 'images/textiles.png';
+                            else pImgUrl = 'images/glass_art.png';
+
+                            const pData = {
+                                name: $('#pName').val(),
+                                sku: $('#pSku').val(),
+                                price: parseFloat($('#pPrice').val()),
+                                stock_quantity: parseInt($('#pStock').val()),
+                                description: $('#pDesc').val(),
+                                category_id: catId,
+                                image_url: pImgUrl
+                            };
+                            
+                            $.ajax({
+                                url: '/api/inventory/products',
+                                type: 'POST',
+                                contentType: 'application/json',
+                                data: JSON.stringify(pData),
+                                xhrFields: { withCredentials: true },
+                                success: () => location.reload(),
+                                error: (xhr) => $('#addProductAlert').removeClass('d-none').text('Failed to list item: ' + (xhr.responseJSON?.error))
+                            });
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

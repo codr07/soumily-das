@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Checkout - OCBMS</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="index.html">← Back to Store</a>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h2 class="mb-4">Checkout Process</h2>
+        
+        <div class="row">
+            <div class="col-md-4 order-md-2 mb-4">
+                <h4 class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="text-muted">Your cart</span>
+                    <span class="badge bg-secondary badge-pill" id="cartCountBadge">0</span>
+                </h4>
+                <ul class="list-group mb-3" id="cartItemsList">
+                    <!-- Items rendered here -->
+                </ul>
+            </div>
+            <div class="col-md-8 order-md-1">
+                <div class="card shadow-sm p-4">
+                    <h4 class="mb-3 border-bottom pb-2">Shipping Details</h4>
+                    <form id="checkoutForm">
+                        <div class="mb-3">
+                            <label for="address">Full Address</label>
+                            <textarea class="form-control" id="address" rows="3" required placeholder="1234 Main St, City, Country"></textarea>
+                        </div>
+                        <hr class="mb-4">
+                        <button class="btn btn-primary btn-lg btn-block w-100 fw-bold" type="submit">Place Order Securely</button>
+                    </form>
+                    <div id="checkoutAlert" class="alert mt-3 d-none"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // Check auth
+            if (!localStorage.getItem('userRole')) {
+                alert('Please sign in to place an order.');
+                window.location.href = 'login.html';
+                return;
+            }
+
+            const cart = JSON.parse(localStorage.getItem('cart')) || [];
+            
+            if (cart.length === 0) {
+                $('#checkoutForm').html('<div class="alert alert-warning">Your cart is empty. <a href="index.html">Go back to shop.</a></div>');
+                $('#cartCountBadge').text(0);
+                return;
+            }
+
+            // Render Cart
+            let total = 0;
+            let cartHtml = '';
+            let orderItems = [];
+
+            cart.forEach(item => {
+                const itemTotal = item.price * item.quantity;
+                total += itemTotal;
+                orderItems.push({ product_id: item.product_id, quantity: item.quantity });
+                
+                cartHtml += `
+                    <li class="list-group-item d-flex justify-content-between lh-condensed">
+                        <div>
+                            <h6 class="my-0">${item.name}</h6>
+                            <small class="text-muted">Quantity: ${item.quantity}</small>
+                        </div>
+                        <span class="text-muted">$${itemTotal.toFixed(2)}</span>
+                    </li>`;
+            });
+
+            cartHtml += `
+                <li class="list-group-item d-flex justify-content-between">
+                    <span>Total (USD)</span>
+                    <strong>$${total.toFixed(2)}</strong>
+                </li>`;
+
+            $('#cartItemsList').html(cartHtml);
+            $('#cartCountBadge').text(cart.length);
+
+            // Submit order
+            $('#checkoutForm').on('submit', function(e) {
+                e.preventDefault();
+                const address = $('#address').val();
+                
+                $.ajax({
+                    url: '/api/orders',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ items: orderItems, shipping_address: address }),
+                    xhrFields: { withCredentials: true },
+                    success: function(response) {
+                        $('#checkoutAlert').removeClass('d-none alert-danger').addClass('alert-success')
+                                .text(`Success! Order ID: ${response.order_id}`);
+                        localStorage.removeItem('cart'); // Clear cart
+                        $('#checkoutForm button').prop('disabled', true);
+                        setTimeout(() => window.location.href = 'dashboard.html', 3000);
+                    },
+                    error: function(xhr) {
+                        $('#checkoutAlert').removeClass('d-none alert-success').addClass('alert-danger')
+                                .text('Order Failed: ' + (xhr.responseJSON?.error || 'Unknown error'));
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
